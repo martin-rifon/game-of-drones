@@ -3,15 +3,13 @@
 angular.module('gameofnodesClientNewestTryApp')
   .service('gameEngine', gameEngineService);
 
-gameEngineService.$inject = ['$http', 'appConfig'];
+gameEngineService.$inject = ['$http', 'appConfig', 'localStorageService'];
 
 /** Core of the game. */
-function gameEngineService($http, appConfig) {
+function gameEngineService($http, appConfig, localStorageService) {
   var service             = {}
   ,   roundWinsForVictory = appConfig.roundWinsForVictory
-  ,   backendURL          = appConfig.backendURL
-  ,   storeStatURL        = appConfig.storeStatURL
-  ,   getRulesURL         = appConfig.getRulesURL;
+  ,   winListStorageName  = appConfig.winListStorageName;
 
   service.player1           = null;
   service.player2           = null;
@@ -22,14 +20,15 @@ function gameEngineService($http, appConfig) {
   service.gameLog           = [];
 
   // Set functions.
-  service.init              = init;
-  service.executeMove       = executeMove;
-  service.getGameLog        = getGameLog;
-  service.getRules          = getRules;
-  service.decideWinner      = decideWinner;
-  service.isGameOver        = isGameOver;
-  service.updateServerStats = updateServerStats;
-  service.resetGameValues   = resetGameValues;
+  service.init                 = init;
+  service.executeMove          = executeMove;
+  service.getGameLog           = getGameLog;
+  service.getRules             = getRules;
+  service.getWinListByWinCount = getWinListByWinCount;
+  service.decideWinner         = decideWinner;
+  service.isGameOver           = isGameOver;
+  service.updateServerStats    = updateServerStats;
+  service.resetGameValues      = resetGameValues;
 
   service.resetGameValues();
 
@@ -87,20 +86,24 @@ function gameEngineService($http, appConfig) {
    * @param {string} playerName Name of the player whose stats are to be updated.
    */
   function updateServerStats(playerName) {
+    var winList               = localStorageService.get(winListStorageName)
+    ,   indexOfPreviousCount  = -1;
 
-    function successCallback(response) {
-      console.log('Stats updated.');
-    }
+    if (winList === null)
+      winList = [];
+    else if (typeof winList === 'string')
+      winList = JSON.parse(winList);
 
-    function errorCallback(response) {
-      console.log('There was an error while trying to update the stats.');
-      console.log(response);
-    }
+    indexOfPreviousCount = winList.findIndex(function (element, index, array) {
+      return (element.name === playerName);
+    });
 
-    $http.post(backendURL + storeStatURL, {
-        "name": playerName
-      }).then(successCallback, 
-              errorCallback);
+    if (indexOfPreviousCount === -1)
+      winList.push({ name: playerName, count: 1 });
+    else
+      winList[indexOfPreviousCount] = { name: playerName, count: (winList[indexOfPreviousCount].count + 1) };
+
+    localStorageService.set(winListStorageName, JSON.stringify(winList));
   }
 
   function isGameOver() {
@@ -130,6 +133,15 @@ function gameEngineService($http, appConfig) {
 
   function getRules() {
       return this.rules;
+  }
+
+  function getWinListByWinCount() {
+    var winList = localStorageService.get(winListStorageName);
+
+    if (winList === null)
+      return [];
+    else
+      return JSON.parse(winList).sort(function compare(a, b) { return (b.count - a.count) ; });
   }
 
   /**
